@@ -1,22 +1,23 @@
 ---
-name: "Bug report \U0001F41E"
-about: Create a bug report
+name: "Problem with the patched firmware"
+about: Report a problem with the Wizodd patch, or a licence or notice concern
 labels: bug
 
 ---
 
-## Describe the bug
-A clear and concise description of what the bug is.
+This fork only carries a fix for Satellite1 units that stop answering their wake word. Problems with the
+original firmware and feature requests belong with FutureProofHomes. No support is promised here; see PATCHES.md.
 
-### Steps to reproduce
-Steps to reproduce the behavior.
+## What happened
+What the unit did, and what you expected.
 
-### Expected behavior
-A clear and concise description of what you expected to happen.
+### Does it also happen on FutureProofHomes' firmware?
+Yes / no / not tried. If you have not tried, PATCHES.md explains how to go back.
 
 ### Environment
- - OS: [e.g. Arch Linux]
- - Other details that you think may affect.
+ - Installed firmware version (shown in Home Assistant, ends in `-wizodd.N`):
+ - Satellite1 model (base, or a radar variant):
+ - Home Assistant version:
 
-### Additional context
-Add any other context about the problem here.
+### Anything else
+Logs, Home Assistant pipeline debug output, or the steps that lead up to it.

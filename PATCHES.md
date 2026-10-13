@@ -24,7 +24,9 @@ Things that can go wrong, or that you give up, by running this firmware:
 - FutureProofHomes did not write or test these changes. They may decline to help with a unit that runs this
   firmware, or ask you to put theirs back first. Whether third-party firmware affects your warranty is
   between you and FutureProofHomes; ask them if it matters to you.
-- Wizodd Technologies LLC provides no support, and may stop maintaining this branch at any time.
+- Wizodd Technologies LLC provides no support, and may stop maintaining this branch at any time. Problems with
+  the patch itself can be reported in this repository's
+  [Issues](https://github.com/wizodd-tech/Satellite1-ESPHome/issues); no response is promised.
 
 **Updates**
 

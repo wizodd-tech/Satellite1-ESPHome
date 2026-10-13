@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Problem with the original Satellite1 firmware, or a feature request
+    url: https://github.com/FutureProofHomes/Satellite1-ESPHome/issues
+    about: This fork only carries a fix for units that stop answering the wake word. Everything else belongs with FutureProofHomes.
