@@ -5,7 +5,7 @@ with ESPHome 2026.7.3. `manifest.json` on that branch points here, which is how 
 firmware finds its updates.
 
 **Unofficial.** This is FutureProofHomes' open-source Satellite1 firmware with fixes applied by Wizodd
-Technologies. FutureProofHomes has not reviewed, approved or endorsed it, and Wizodd Technologies is not
+Technologies LLC. FutureProofHomes has not reviewed, approved or endorsed it, and Wizodd Technologies LLC is not
 affiliated with them.
 
 Before installing, read these two sections of
