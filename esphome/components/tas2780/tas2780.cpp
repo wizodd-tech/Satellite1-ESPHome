@@ -277,10 +277,18 @@ void TAS2780::setup() {
 }
 
 void TAS2780::init() {
+  // Public init must not erase an unobserved runtime shutdown or bypass recovery gates.
+  if (!this->observe_runtime_mode_() || this->protection_blocked_ || this->protection_lockout_ || this->recovery_delay_)
+    return;
+  if (this->active_) {
+    this->active_ = false;
+    this->disable_loop();
+  }
   // select page 0
   this->reg(TAS2780_PAGE_SELECT) = 0x00;
 
   // software reset
+  this->applied_dvc_valid_ = false;
   this->reg(0x01) = 0x01;
 
   uint8_t chd1 = this->reg(0x05).get();
@@ -340,6 +348,29 @@ void TAS2780::init() {
 }
 
 void TAS2780::activate() {
+  this->desired_active_ = true;
+  if (this->protection_reduction_required_ &&
+      (!this->applied_dvc_valid_ || this->applied_dvc_ <= this->protection_dvc_))
+    this->protection_lockout_ = true;
+  if (this->protection_blocked_ || this->protection_lockout_)
+    return;
+  if (this->recovery_delay_) {
+    const uint32_t elapsed = millis() - this->recovery_started_ms_;
+    if (elapsed < 2000) {
+      this->set_timeout("protection_recovery", 2000 - elapsed, [this]() {
+        if (this->desired_active_)
+          this->activate();
+      });
+      return;
+    }
+    this->recovery_delay_ = false;
+  }
+  if (this->active_) {
+    this->observe_runtime_mode_();
+    return;
+  }
+  if (this->activation_pending_)
+    return;
   if (this->activation_guard_ && !this->activation_guard_()) {
     ESP_LOGD(TAG, "TAS2780 activation deferred until audio hardware is ready");
     return;
@@ -347,14 +378,19 @@ void TAS2780::activate() {
   constexpr uint8_t bootstrap_power_mode = 0;
   ESP_LOGD(TAG, "Activating TAS2780 in bootstrap PWR_MODE:%d", bootstrap_power_mode);
   // clear interrupt latches
-  this->reg(TAS2780_INT_CLK_CFG) = 0x19 | (1 << 2);
+  if (!this->write_byte(TAS2780_PAGE_SELECT, 0x00) || !this->write_byte(TAS2780_INT_CLK_CFG, 0x19 | (1 << 2))) {
+    this->protection_shutdown_(false);
+    return;
+  }
   if (bootstrap_power_mode != this->power_mode_) {
     this->power_mode_ = bootstrap_power_mode;
     this->init();
-    this->write_mute_();
   }
-  this->reg(TAS2780_MODE_CTRL) =
-      (TAS2780_MODE_CTRL_BOP_SRC__PVDD_UVLO & ~TAS2780_MODE_CTRL_MODE_MASK) | TAS2780_MODE_CTRL_MODE__ACTIVE_MUTED;
+  if (!this->write_mute_() || !this->write_byte(TAS2780_MODE_CTRL, TAS2780_MODE_CTRL_BOP_SRC__PVDD_UVLO |
+                                                                       TAS2780_MODE_CTRL_MODE__ACTIVE_MUTED)) {
+    this->protection_shutdown_(false);
+    return;
+  }
   this->enable_loop();
 
   // The TAS SAR ADC only provides valid supply measurements after 100 ms of active operation.
@@ -363,6 +399,17 @@ void TAS2780::activate() {
 }
 
 void TAS2780::finish_activation_() {
+  if (this->protection_reduction_required_ &&
+      (!this->applied_dvc_valid_ || this->applied_dvc_ <= this->protection_dvc_)) {
+    this->protection_lockout_ = true;
+    const bool desired = this->desired_active_;
+    this->deactivate();
+    this->desired_active_ = desired;
+    return;
+  }
+  if (!this->activation_pending_ || !this->desired_active_ || this->protection_blocked_ || this->protection_lockout_ ||
+      this->recovery_delay_)
+    return;
   if (this->activation_guard_ && !this->activation_guard_()) {
     this->deactivate();
     return;
@@ -372,6 +419,8 @@ void TAS2780::finish_activation_() {
   constexpr uint8_t fallback_power_mode = 2;
   SupplyVoltages voltages;
   const bool supply_read = this->read_supply_voltages_(&voltages);
+  if (!this->activation_pending_)
+    return;  // A shutdown/fault observation must not fall through to init() and clear its evidence.
   const bool valid_supply_read =
       supply_read &&
       (voltages.pvdd >= TAS2780_POWER_MODE2_MIN_PVDD ||
@@ -389,9 +438,11 @@ void TAS2780::finish_activation_() {
     this->log_error_states();
     this->power_mode_ = fallback_power_mode;
     this->init();
-    this->write_mute_();
-    this->reg(TAS2780_MODE_CTRL) =
-        (TAS2780_MODE_CTRL_BOP_SRC__PVDD_UVLO & ~TAS2780_MODE_CTRL_MODE_MASK) | TAS2780_MODE_CTRL_MODE__ACTIVE_MUTED;
+    if (!this->write_mute_() || !this->write_byte(TAS2780_MODE_CTRL, TAS2780_MODE_CTRL_BOP_SRC__PVDD_UVLO |
+                                                                         TAS2780_MODE_CTRL_MODE__ACTIVE_MUTED)) {
+      this->protection_shutdown_(false);
+      return;
+    }
     this->enable_loop();
     this->set_timeout("finish_activation", 100, [this]() { this->finish_activation_(); });
     return;
@@ -412,26 +463,46 @@ void TAS2780::finish_activation_() {
   if (selected_power_mode != this->power_mode_) {
     this->power_mode_ = selected_power_mode;
     this->init();
-    this->write_mute_();
   }
-  this->reg(TAS2780_MODE_CTRL) =
-      (TAS2780_MODE_CTRL_BOP_SRC__PVDD_UVLO & ~TAS2780_MODE_CTRL_MODE_MASK) | TAS2780_MODE_CTRL_MODE__ACTIVE;
+  if (!this->write_mute_() ||
+      !this->write_byte(TAS2780_MODE_CTRL, TAS2780_MODE_CTRL_BOP_SRC__PVDD_UVLO | TAS2780_MODE_CTRL_MODE__ACTIVE)) {
+    this->protection_shutdown_(false);
+    return;
+  }
   this->active_ = true;
   this->activation_pending_ = false;
+  this->protection_reduction_required_ = false;
 }
 
 void TAS2780::deactivate() {
-  ESP_LOGD(TAG, "Dectivating TAS2780");
+  ESP_LOGD(TAG, "Deactivating TAS2780");
+  this->desired_active_ = false;
+  // Preserve an unobserved runtime fault before intentional shutdown hides it.
+  this->observe_runtime_mode_();
   this->cancel_timeout("finish_activation");
+  this->cancel_timeout("protection_recovery");
   this->activation_pending_ = false;
   // set to software shutdown
-  this->reg(TAS2780_MODE_CTRL) =
-      (TAS2780_MODE_CTRL_BOP_SRC__PVDD_UVLO & ~TAS2780_MODE_CTRL_MODE_MASK) | TAS2780_MODE_CTRL_MODE__SFTW_SHTDWN;
+  if (!this->write_byte(TAS2780_PAGE_SELECT, 0x00) ||
+      !this->write_byte(TAS2780_MODE_CTRL,
+                        TAS2780_MODE_CTRL_BOP_SRC__PVDD_UVLO | TAS2780_MODE_CTRL_MODE__SFTW_SHTDWN)) {
+    this->protection_blocked_ = true;
+    ESP_LOGE(TAG, "Shutdown write failed; recovery blocked until reboot");
+  }
   this->disable_loop();
   this->active_ = false;
 }
 
 void TAS2780::reset() {
+  if (!this->observe_runtime_mode_())
+    return;
+  if (this->protection_blocked_ || this->protection_lockout_ || this->recovery_delay_) {
+    this->activate();
+    return;
+  }
+  this->cancel_timeout("finish_activation");
+  this->activation_pending_ = false;
+  this->active_ = false;
   this->init();
   this->activate();
 }
@@ -453,15 +524,16 @@ bool TAS2780::read_supply_voltages_(SupplyVoltages *voltages) {
   uint16_t pvdd_raw;
   if (!this->write_byte(TAS2780_PAGE_SELECT, 0x00) || !this->read_byte(TAS2780_MODE_CTRL, &voltages->mode_ctrl)) {
     ESP_LOGE(TAG, "TAS2780 I2C supply read failed");
+    if (this->active_)
+      this->protection_shutdown_(false);
     return false;
   }
   const uint8_t operational_mode = voltages->mode_ctrl & TAS2780_MODE_CTRL_MODE_MASK;
   if (operational_mode != TAS2780_MODE_CTRL_MODE__ACTIVE && operational_mode != TAS2780_MODE_CTRL_MODE__ACTIVE_MUTED) {
     ESP_LOGW(TAG, "Skipping supply sample because TAS2780 is not active (MODE_CTRL 0x%02X)", voltages->mode_ctrl);
-    if (operational_mode == TAS2780_MODE_CTRL_MODE__SFTW_SHTDWN) {
-      this->active_ = false;
-      this->disable_loop();
-    }
+    // Bootstrap shutdown can be the expected no-external-VBAT case; preserve mode-2 fallback.
+    if (this->active_)
+      this->protection_shutdown_(operational_mode == TAS2780_MODE_CTRL_MODE__SFTW_SHTDWN);
     return false;
   }
   if (!this->read_adc12_(TAS2780_VBAT_MSB, TAS2780_VBAT_LSB, &vbat_raw) ||
@@ -575,16 +647,82 @@ void TAS2780::log_error_states() {
 }
 
 void TAS2780::loop() {
-  static uint32_t last_call = millis();
-  if (millis() - last_call > 1000) {
-    last_call = millis();
-    uint8_t curr_mode = this->reg(TAS2780_MODE_CTRL).get() & 7;
-    if (curr_mode == 2) {
-      ESP_LOGD(TAG, "Current Mode: SOFTWARE_SHUTDOWN (PWR_MODE: %d)", this->power_mode_);
-      this->log_error_states();
-      this->active_ = false;
-      this->disable_loop();
-    }
+  if (this->activation_pending_ || !this->active_)
+    return;
+  if (millis() - this->mode_check_ms_ > 1000) {
+    this->mode_check_ms_ = millis();
+    this->observe_runtime_mode_();
+  }
+}
+
+bool TAS2780::observe_runtime_mode_() {
+  if (!this->active_)
+    return true;
+  uint8_t mode;
+  if (!this->write_byte(TAS2780_PAGE_SELECT, 0x00) || !this->read_byte(TAS2780_MODE_CTRL, &mode)) {
+    this->protection_shutdown_(false);
+    return false;
+  }
+  mode &= TAS2780_MODE_CTRL_MODE_MASK;
+  if (mode != TAS2780_MODE_CTRL_MODE__ACTIVE && mode != TAS2780_MODE_CTRL_MODE__ACTIVE_MUTED) {
+    this->protection_shutdown_(mode == TAS2780_MODE_CTRL_MODE__SFTW_SHTDWN);
+    return false;
+  }
+  return true;
+}
+
+void TAS2780::protection_shutdown_(bool mode_read_ok) {
+  // Snapshot every latch before any reset or activation clears the evidence. No live-bit assumptions.
+  const uint8_t registers[] = {TAS2780_INT_LTCH0, TAS2780_INT_LTCH1, TAS2780_INT_LTCH1_0,
+                               TAS2780_INT_LTCH2, TAS2780_INT_LTCH3, TAS2780_INT_LTCH4};
+  uint8_t faults[6]{};
+  bool observed = this->write_byte(TAS2780_PAGE_SELECT, 0x00);
+  for (uint8_t i = 0; i < 6; ++i) {
+    const bool read_ok = this->read_byte(registers[i], &faults[i]);
+    observed = read_ok && observed;
+    ESP_LOGW(TAG, "Shutdown latch 0x%02X: 0x%02X (read %s)", registers[i], faults[i], YESNO(read_ok));
+  }
+  const bool distinct_trip = this->active_ && !this->activation_pending_;
+  this->cancel_timeout("finish_activation");
+  this->cancel_timeout("protection_recovery");
+  this->activation_pending_ = false;
+  this->active_ = false;
+  this->disable_loop();
+  const bool shutdown_written =
+      this->write_byte(TAS2780_PAGE_SELECT, 0x00) &&
+      this->write_byte(TAS2780_MODE_CTRL, TAS2780_MODE_CTRL_BOP_SRC__PVDD_UVLO | TAS2780_MODE_CTRL_MODE__SFTW_SHTDWN);
+  // Only an isolated, checked OC observation permits automatic retry. Thermal clearance is unverified.
+  if (!mode_read_ok || !observed || !shutdown_written || faults[0] != TAS2780_INT_LTCH0_IR_OC || faults[1] != 0 ||
+      faults[2] != 0 || faults[3] != 0 || faults[4] != 0 || faults[5] != 0) {
+    this->protection_blocked_ = true;
+    ESP_LOGE(TAG, "Unsafe or unknown shutdown cause; recovery blocked until reboot");
+    return;
+  }
+  if (!distinct_trip || this->protection_blocked_ || this->protection_lockout_)
+    return;
+  const uint32_t now = millis();
+  uint8_t retained = 0;
+  for (uint8_t i = 0; i < this->protection_trips_; ++i) {
+    if (now - this->protection_trip_ms_[i] <= 60000)
+      this->protection_trip_ms_[retained++] = this->protection_trip_ms_[i];
+  }
+  this->protection_trip_ms_[retained++] = now;
+  this->protection_trips_ = retained;
+  this->recovery_started_ms_ = now;
+  this->recovery_delay_ = true;
+  if (retained == 3) {
+    this->protection_lockout_ = true;
+    this->protection_reduction_required_ = true;
+    this->protection_dvc_ = this->applied_dvc_;
+    if (!this->applied_dvc_valid_)
+      this->protection_blocked_ = true;
+    ESP_LOGE(TAG, "Three shutdowns within 60 s; waiting for a confirmed lower DVC level");
+  } else if (this->desired_active_) {
+    ESP_LOGW(TAG, "Over-current shutdown; retrying in 2 s");
+    this->set_timeout("protection_recovery", 2000, [this]() {
+      if (this->desired_active_)
+        this->activate();
+    });
   }
 }
 
@@ -593,6 +731,8 @@ void TAS2780::dump_config() {
   LOG_I2C_DEVICE(this);
   ESP_LOGCONFIG(TAG, "  Active: %s", YESNO(this->active_));
   ESP_LOGCONFIG(TAG, "  Activation pending: %s", YESNO(this->activation_pending_));
+  ESP_LOGCONFIG(TAG, "  Protection lockout: %s; recovery blocked until reboot: %s", YESNO(this->protection_lockout_),
+                YESNO(this->protection_blocked_));
   ESP_LOGCONFIG(TAG, "  Power mode: %u", this->power_mode_);
   ESP_LOGCONFIG(TAG, "  Muted: %s", YESNO(this->is_muted_));
   if (this->last_supply_sample_valid_) {
@@ -625,7 +765,10 @@ float TAS2780::volume() { return this->volume_; }
 
 bool TAS2780::write_mute_() {
   if (this->is_muted_) {
-    return this->write_byte(TAS2780_PAGE_SELECT, 0x00) && this->write_byte(TAS2780_DVC, 0xC9);
+    const bool written = this->write_byte(TAS2780_PAGE_SELECT, 0x00) && this->write_byte(TAS2780_DVC, 0xC9);
+    if (!written)
+      this->applied_dvc_valid_ = false;
+    return written;
   }
   return this->write_volume_();
 }
@@ -648,7 +791,24 @@ bool TAS2780::write_volume_() {
   ESP_LOGD(TAG, "Setting attenuation to: %4.2f", attenuation);
   // DVC uses 0.5 dB steps; clamp before narrowing to the register width.
   uint8_t dvc = static_cast<uint8_t>(clamp<long>(std::lround(attenuation * 2.0f), 0, 0xC8));
-  return this->write_byte(TAS2780_PAGE_SELECT, 0x00) && this->write_byte(TAS2780_DVC, this->is_muted_ ? 0xC9 : dvc);
+  const bool written =
+      this->write_byte(TAS2780_PAGE_SELECT, 0x00) && this->write_byte(TAS2780_DVC, this->is_muted_ ? 0xC9 : dvc);
+  if (!written) {
+    this->applied_dvc_valid_ = false;
+    return false;
+  }
+  if (!this->is_muted_) {
+    this->applied_dvc_ = dvc;
+    this->applied_dvc_valid_ = true;
+    // Higher DVC means lower hardware volume; an equal quantized level or a mute write cannot unlock.
+    if (this->protection_lockout_ && !this->protection_blocked_ && dvc > this->protection_dvc_) {
+      this->protection_lockout_ = false;
+      this->protection_trips_ = 0;
+      if (this->desired_active_)
+        this->activate();
+    }
+  }
+  return true;
 }
 
 void TAS2780::update_register() {

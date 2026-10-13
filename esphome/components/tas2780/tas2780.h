@@ -54,12 +54,26 @@ class TAS2780 : public audio_dac::AudioDac, public Component, public i2c::I2CDev
   void finish_activation_();
   bool read_adc12_(uint8_t msb_reg, uint8_t lsb_reg, uint16_t *raw);
   bool read_supply_voltages_(SupplyVoltages *voltages);
+  bool observe_runtime_mode_();
+  void protection_shutdown_(bool mode_read_ok);
   bool write_mute_();
   bool write_volume_();
 
   float volume_{0};
   bool active_{false};
   bool activation_pending_{false};
+  bool desired_active_{false};
+  bool protection_lockout_{false};
+  bool protection_reduction_required_{false};
+  bool protection_blocked_{false};
+  bool recovery_delay_{false};
+  uint32_t recovery_started_ms_{0};
+  uint32_t mode_check_ms_{0};
+  uint32_t protection_trip_ms_[3]{};
+  uint8_t protection_trips_{0};
+  uint8_t protection_dvc_{0};
+  uint8_t applied_dvc_{0};
+  bool applied_dvc_valid_{false};
   bool last_supply_sample_valid_{false};
   SupplyVoltages last_supply_voltages_{};
   uint8_t power_mode_{2};
