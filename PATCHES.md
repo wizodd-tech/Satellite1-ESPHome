@@ -1,7 +1,7 @@
 # Wizodd patches to the Satellite1 firmware
 
 > **Unofficial.** This is not FutureProofHomes firmware. It is their open-source Satellite1 firmware **v0.2.1**
-> with a small set of fixes applied by Wizodd Technologies. FutureProofHomes has not reviewed, approved or
+> with a small set of fixes applied by Wizodd Technologies LLC. FutureProofHomes has not reviewed, approved or
 > endorsed it. Read [Before you install](#before-you-install) and
 > [Going back to the original firmware](#going-back-to-the-original-firmware) first.
 
@@ -24,7 +24,7 @@ Things that can go wrong, or that you give up, by running this firmware:
 - FutureProofHomes did not write or test these changes. They may decline to help with a unit that runs this
   firmware, or ask you to put theirs back first. Whether third-party firmware affects your warranty is
   between you and FutureProofHomes; ask them if it matters to you.
-- Wizodd Technologies provides no support, and may stop maintaining this branch at any time.
+- Wizodd Technologies LLC provides no support, and may stop maintaining this branch at any time.
 
 **Updates**
 
@@ -163,12 +163,12 @@ that point this branch has no reason to exist and units should go back to Future
 
 This firmware and the binaries built from it are provided "as is", without warranty of any kind, express or
 implied, including but not limited to the warranties of merchantability, fitness for a particular purpose
-and non-infringement. You install and use them at your own risk. In no event shall Wizodd Technologies or
-the contributors be liable for any claim, damages or other liability, including damage to or loss of use of
+and non-infringement. You install and use them at your own risk. In no event shall Wizodd Technologies LLC
+or the contributors be liable for any claim, damages or other liability, including damage to or loss of use of
 a device, arising from the firmware or its use. The licence in `LICENSE` governs; this paragraph restates
 it and does not replace it.
 
-Wizodd Technologies is not affiliated with, sponsored by or endorsed by FutureProofHomes, the ESPHome
+Wizodd Technologies LLC is not affiliated with, sponsored by or endorsed by FutureProofHomes, the ESPHome
 project, the Open Home Foundation, Nabu Casa, Espressif or XMOS. Satellite1, FutureProofHomes, ESPHome,
 Home Assistant and other names used here are trademarks of their respective owners and are used only to
 say what this software works with.

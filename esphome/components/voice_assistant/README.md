@@ -8,7 +8,7 @@ compiled.
 | File | State |
 |---|---|
 | `__init__.py` | Unmodified. GPLv3 part of the ESPHome License. |
-| `voice_assistant.cpp`, `voice_assistant.h` | **Modified by Wizodd Technologies on 2026-10-13.** MIT part of the ESPHome License. |
+| `voice_assistant.cpp`, `voice_assistant.h` | **Modified by Wizodd Technologies LLC on 2026-10-13.** MIT part of the ESPHome License. |
 
 What was changed and why is in [`PATCHES.md`](../../../PATCHES.md) at the top of the repository.
 `git log -p -- esphome/components/voice_assistant` shows the changes line by line: the first commit is the

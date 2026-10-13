@@ -4,7 +4,7 @@ This repository is a fork of [FutureProofHomes/Satellite1-ESPHome](https://githu
 and is distributed under the same licence, the ESPHome License in [`LICENSE`](LICENSE): MIT for the
 C++/runtime code, GPLv3 for the Python code.
 
-It is an unofficial fork. Wizodd Technologies is not affiliated with, sponsored by or endorsed by
+It is an unofficial fork. Wizodd Technologies LLC is not affiliated with, sponsored by or endorsed by
 FutureProofHomes, the ESPHome project, the Open Home Foundation, Nabu Casa, Espressif or XMOS. Product and
 project names are trademarks of their respective owners.
 
@@ -12,10 +12,10 @@ project names are trademarks of their respective owners.
 
 - ESPHome: Copyright (c) 2019 ESPHome.
 - Satellite1 firmware configuration and components: FutureProofHomes and the contributors to that repository.
-- Changes on the `wizodd-patched` branch: Copyright (c) 2026 Wizodd Technologies, released under the same
+- Changes on the `wizodd-patched` branch: Copyright (c) 2026 Wizodd Technologies LLC, released under the same
   licence as the files they change.
 
-## Files changed by Wizodd Technologies
+## Files changed by Wizodd Technologies LLC
 
 All changes were made on 2026-10-13. `git log v0.2.1..wizodd-patched`
 shows them exactly.

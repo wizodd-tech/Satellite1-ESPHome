@@ -1,6 +1,6 @@
 > **Unofficial patched fork.** Branch `wizodd-patched` is FutureProofHomes' open-source Satellite1 firmware v0.2.1
-> plus fixes, by Wizodd Technologies, for a Satellite1 that stops answering its wake word until it is restarted.
-> FutureProofHomes has not reviewed, approved or endorsed it, and Wizodd Technologies is not affiliated with them.
+> plus fixes, by Wizodd Technologies LLC, for a Satellite1 that stops answering its wake word until it is restarted.
+> FutureProofHomes has not reviewed, approved or endorsed it, and Wizodd Technologies LLC is not affiliated with them.
 > It is provided as is, without warranty or support; you use it at your own risk.
 >
 > Read [PATCHES.md](PATCHES.md) before installing: it covers what can go wrong, what you give up, and
