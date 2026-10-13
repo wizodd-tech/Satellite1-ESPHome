@@ -25,7 +25,8 @@ Base model only. Do not install on a unit running the radar variants (`+ld2410`,
 
 The binaries are distributed under the ESPHome License in [`LICENSE`](LICENSE). They contain third-party
 software, listed with its licences in [`NOTICE.md`](NOTICE.md), including an XMOS firmware image under the
-XMOS Public Licence in [`licenses/XMOS-PUBLIC-LICENCE.txt`](licenses/XMOS-PUBLIC-LICENCE.txt). The source for
+XMOS Public Licence in [`licenses/XMOS-PUBLIC-LICENCE.txt`](licenses/XMOS-PUBLIC-LICENCE.txt) and sound effects
+by Clayton Charles Tapp under CC BY 4.0 ([`licenses/SOUNDS-CC-BY-4.0.md`](licenses/SOUNDS-CC-BY-4.0.md)). The source for
 everything built here is the `wizodd-patched` branch of this repository.
 
 Provided "as is", without warranty of any kind. You install and use these files at your own risk.

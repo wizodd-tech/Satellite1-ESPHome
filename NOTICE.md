@@ -42,7 +42,7 @@ build fetches, the same as FutureProofHomes' own v0.2.1 build. The main parts:
 | TensorFlow Lite Micro | Apache-2.0 | <https://github.com/espressif/esp-tflite-micro> |
 | microWakeWord models "Hey Jarvis", "Okay Nabu" and "Stop", by Kevin Ahrendt | Apache-2.0, as published in <https://github.com/esphome/micro-wake-word-models> | fetched from FutureProofHomes' firmware assets |
 | XMOS firmware image v1.0.3 for the Satellite1 HAT, embedded unmodified | XMOS Public Licence, Version 1: [`licenses/XMOS-PUBLIC-LICENCE.txt`](licenses/XMOS-PUBLIC-LICENCE.txt) | source code: <https://github.com/FutureProofHomes/Satellite1-XMOS> |
-| Sound effects (wake, mute, timer, jack and reset sounds), embedded unmodified | As provided by FutureProofHomes for this firmware. We found no separate licence statement for these files. | fetched from FutureProofHomes' firmware assets |
+| Sound effects (wake, mute, timer, jack and reset sounds), embedded unmodified | "Home Assistant Voice Preview Edition Sounds" © 2024 by [Clayton Charles Tapp](https://www.cctaudio.com/), [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/): [`licenses/SOUNDS-CC-BY-4.0.md`](licenses/SOUNDS-CC-BY-4.0.md) | origin: <https://github.com/esphome/home-assistant-voice-pe/tree/dev/sounds>; fetched from FutureProofHomes' firmware assets |
 
 The source code of the XMOS firmware is available under the terms of the XMOS Public Licence at the address
 above.
