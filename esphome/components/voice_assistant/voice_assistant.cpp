@@ -282,18 +282,71 @@ void VoiceAssistant::handle_channel_stall_(size_t available, size_t available2) 
   }
 }
 
+static const LogString *voice_assistant_state_to_string(State state);
+
+void VoiceAssistant::abort_run_() {
+  if (this->state_ == State::IDLE || this->state_ == State::STOP_MICROPHONE ||
+      this->state_ == State::STOPPING_MICROPHONE) {
+    return;
+  }
+  if (this->mic_source_->is_running() || (this->mic_source2_ && this->mic_source2_->is_running()) ||
+      this->state_ == State::STARTING_MICROPHONE) {
+    this->set_state_(State::STOP_MICROPHONE, State::IDLE);
+  } else {
+    this->set_state_(State::IDLE, State::IDLE);
+  }
+  this->continuous_ = false;
+  this->signal_stop_();
+  this->clear_buffers_();
+}
+
+bool VoiceAssistant::run_is_stalled_() const {
+  const uint32_t waited = millis() - this->state_entered_at_;
+  switch (this->state_) {
+    case State::STARTING_PIPELINE:
+      return waited > PIPELINE_START_TIMEOUT_MS;
+    case State::AWAITING_RESPONSE:
+      return waited > RESPONSE_TIMEOUT_MS;
+#ifdef USE_MEDIA_PLAYER
+    case State::STREAMING_RESPONSE:
+      // The reply URL went to the media player but the announcement never began (the fetch failed, the player
+      // was busy). Only the announcement starting and finishing moves this state on, so it would wait forever.
+      return this->media_player_ != nullptr &&
+             this->media_player_response_state_ == MediaPlayerResponseState::URL_SENT && waited > RESPONSE_TIMEOUT_MS;
+#endif
+    default:
+      return false;
+  }
+}
+
+void VoiceAssistant::end_stalled_run_(const char *reason, bool report_error) {
+  ESP_LOGW(TAG, "Ending run stuck in %s: %s", LOG_STR_ARG(voice_assistant_state_to_string(this->state_)), reason);
+#ifdef USE_MEDIA_PLAYER
+  if (this->media_player_ != nullptr) {
+    this->media_player_response_state_ = MediaPlayerResponseState::IDLE;
+  }
+#endif
+  this->cancel_timeout("playing");
+  this->abort_run_();
+  if (report_error) {
+    this->error_trigger_.trigger("pipeline-timeout", reason);
+  }
+  this->defer([this]() { this->end_trigger_.trigger(); });
+}
+
 void VoiceAssistant::loop() {
-  if (this->api_client_ == nullptr && this->state_ != State::IDLE && this->state_ != State::STOP_MICROPHONE &&
-      this->state_ != State::STOPPING_MICROPHONE) {
-    if (this->mic_source_->is_running() || (this->mic_source2_ && this->mic_source2_->is_running()) ||
-        this->state_ == State::STARTING_MICROPHONE) {
-      this->set_state_(State::STOP_MICROPHONE, State::IDLE);
-    } else {
-      this->set_state_(State::IDLE, State::IDLE);
+  if (this->api_client_ == nullptr) {
+    if (this->state_ != State::IDLE && this->state_ != State::STOP_MICROPHONE &&
+        this->state_ != State::STOPPING_MICROPHONE) {
+      this->abort_run_();
+      return;
     }
-    this->continuous_ = false;
-    this->signal_stop_();
-    this->clear_buffers_();
+  } else if (this->run_is_stalled_()) {
+    // Home Assistant drives a run forward with events. If they stop coming while the connection stays up (a lost
+    // run-end, a pipeline that died, a reply that never plays) nothing else returns the state machine to IDLE,
+    // is_running() stays true, and a device whose wake word handler stops a running pipeline instead of starting
+    // one is deaf until it is rebooted.
+    this->end_stalled_run_("no response from Home Assistant", true);
     return;
   }
   switch (this->state_) {
@@ -552,16 +605,29 @@ void VoiceAssistant::client_subscription(api::APIConnection *client, bool subscr
     return;
   }
 
+  if (this->api_client_ == client) {
+    return;  // Already subscribed on this connection.
+  }
+
   if (this->api_client_ != nullptr) {
+    // A different connection is asking for the subscription. Home Assistant keeps one connection per device, so
+    // this is a reconnect: the connection held here is dead (Wi-Fi dropped without a TCP close) but has not
+    // timed out yet, which takes up to 2.5 keepalive periods. Refusing the newcomer strands the device: once the
+    // dead connection is reaped nobody is subscribed, and Home Assistant, which was never told it was refused,
+    // does not ask again. Wake words then do nothing until a reboot. So the newest subscriber wins.
     char current_peername[socket::SOCKADDR_STR_LEN];
     char new_peername[socket::SOCKADDR_STR_LEN];
-    ESP_LOGE(TAG,
-             "Multiple API Clients attempting to connect to Voice Assistant\n"
-             "  Current client: %s (%s)\n"
+    ESP_LOGW(TAG,
+             "Voice Assistant subscription taken over by a new API client\n"
+             "  Previous client: %s (%s)\n"
              "  New client: %s (%s)",
              this->api_client_->get_name(), this->api_client_->get_peername_to(current_peername), client->get_name(),
              client->get_peername_to(new_peername));
-    return;
+    // End the previous subscription the way a disconnect would. The old connection's own teardown is then a
+    // no-op, because it is no longer the current client.
+    this->api_client_ = nullptr;
+    this->abort_run_();
+    this->client_disconnected_trigger_.trigger();
   }
 
   this->api_client_ = client;
@@ -604,6 +670,10 @@ static const LogString *voice_assistant_state_to_string(State state) {
 void VoiceAssistant::set_state_(State state) {
   State old_state = this->state_;
   this->state_ = state;
+  this->state_entered_at_ = millis();
+  if (state == State::IDLE) {
+    this->cancel_timeout("stop-watchdog");
+  }
   ESP_LOGD(TAG, "State changed from %s to %s", LOG_STR_ARG(voice_assistant_state_to_string(old_state)),
            LOG_STR_ARG(voice_assistant_state_to_string(state)));
 }
@@ -730,6 +800,17 @@ void VoiceAssistant::request_stop() {
       break;
     case State::RESPONSE_FINISHED:
       break;  // Let the incoming audio stream finish then it will go to idle.
+  }
+
+  // Several of the cases above only ask Home Assistant or the media player to wind the run down, and rely on an
+  // event coming back to reach IDLE. If the run is already lost on the other side, none comes. Don't wait forever.
+  if (this->state_ != State::IDLE) {
+    this->set_timeout("stop-watchdog", STOP_TIMEOUT_MS, [this]() {
+      if (this->state_ != State::IDLE && this->state_ != State::STOP_MICROPHONE &&
+          this->state_ != State::STOPPING_MICROPHONE) {
+        this->end_stalled_run_("stop was requested but the run did not end", false);
+      }
+    });
   }
 }
 

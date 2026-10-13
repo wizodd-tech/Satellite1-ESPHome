@@ -112,6 +112,11 @@ voice_assistant:
     - script.execute: control_leds
   on_client_disconnected:
     - voice_assistant.stop:
+    # A run cut off by the disconnect never reaches on_end, so stop ducking audio here as well.
+    - mixer_speaker.apply_ducking:
+        id: media_mixing_input
+        decibel_reduction: 0   # 0 dB means no reduction
+        duration: 1.0s
     - lambda: id(voice_assistant_phase) = ${voice_assist_not_ready_phase_id};
     - script.execute: control_leds
   on_error:

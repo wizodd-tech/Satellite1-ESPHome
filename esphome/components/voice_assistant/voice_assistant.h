@@ -244,6 +244,16 @@ class VoiceAssistant final : public Component {
   void signal_stop_();
   void start_playback_timeout_();
 
+  // Drops the run in progress and returns the state machine to IDLE (through STOP_MICROPHONE if the
+  // microphone is running). Used when the API client that owned the run is gone.
+  void abort_run_();
+  // True when the run is parked in a state that only an event from Home Assistant can move it out of, and that
+  // event is overdue. See the *_TIMEOUT_MS constants.
+  bool run_is_stalled_() const;
+  // abort_run_() for a run that is stuck while the API client is still connected: also resets the reply
+  // playback tracking and fires on_end (and on_error when report_error is set) so automations clean up.
+  void end_stalled_run_(const char *reason, bool report_error);
+
   // Drains the exposed microphone audio and sends it to Home Assistant over the API in one loop() pass.
   void stream_api_audio_();
   // Handles a pass where at least one configured channel has no audio exposed, timing out a channel that
@@ -341,6 +351,16 @@ class VoiceAssistant final : public Component {
 
   State state_{State::IDLE};
   State desired_state_{State::IDLE};
+
+  // millis() when state_ last changed; what the stall timeouts below are measured from.
+  uint32_t state_entered_at_{0};
+  // Home Assistant answers a start request at once; this long without an answer means it never will.
+  static constexpr uint32_t PIPELINE_START_TIMEOUT_MS = 15000;
+  // Waiting for the reply (AWAITING_RESPONSE) or for its playback to begin. Generous on purpose, so a slow
+  // conversation agent is never cut off; it only bounds how long a stuck device stays deaf if left alone.
+  static constexpr uint32_t RESPONSE_TIMEOUT_MS = 300000;
+  // After request_stop() the run must reach IDLE within this time or it is ended by force.
+  static constexpr uint32_t STOP_TIMEOUT_MS = 5000;
 
   AudioMode audio_mode_{AUDIO_MODE_UDP};
   bool udp_socket_running_{false};
