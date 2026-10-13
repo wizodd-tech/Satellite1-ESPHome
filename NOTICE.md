@@ -48,7 +48,7 @@ The source code of the XMOS firmware is available under the terms of the XMOS Pu
 above.
 
 This list covers the main parts and is not exhaustive. If you believe something here is wrong or missing,
-contact the repository owner, wizodd-tech, on GitHub.
+open an issue on this repository: <https://github.com/wizodd-tech/Satellite1-ESPHome/issues>.
 
 ## No warranty
 
