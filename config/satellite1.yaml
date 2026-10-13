@@ -74,7 +74,7 @@ update:
   - platform: http_request
     name: None
     id: update_http_request
-    source: https://raw.githubusercontent.com/FutureProofHomes/Documentation/refs/heads/main/manifest.json
+    source: https://raw.githubusercontent.com/wizodd-tech/Satellite1-ESPHome/wizodd-patched/manifest.json
 
 switch:
   - platform: template
@@ -86,11 +86,11 @@ switch:
     restore_mode: RESTORE_DEFAULT_OFF
     on_turn_on:
       - logger.log: "OTA updates set to use Beta firmware"
-      - lambda: id(update_http_request).set_source_url("https://raw.githubusercontent.com/FutureProofHomes/Documentation/refs/heads/main/manifest-beta.json");
+      - lambda: id(update_http_request).set_source_url("https://raw.githubusercontent.com/wizodd-tech/Satellite1-ESPHome/wizodd-patched/manifest.json");
       - component.update: update_http_request
     on_turn_off:
       - logger.log: "OTA updates set to use Production firmware"
-      - lambda: id(update_http_request).set_source_url("https://raw.githubusercontent.com/FutureProofHomes/Documentation/refs/heads/main/manifest.json");
+      - lambda: id(update_http_request).set_source_url("https://raw.githubusercontent.com/wizodd-tech/Satellite1-ESPHome/wizodd-patched/manifest.json");
       - component.update: update_http_request
 
 external_components:
@@ -104,6 +104,8 @@ external_components:
       - satellite1
       - satellite1_radar
       - tas2780
+      # ESPHome's own component, carried here with the fixes described in PATCHES.md
+      - voice_assistant
 
 logger:
   deassert_rts_dtr: true

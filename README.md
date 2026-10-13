@@ -1,3 +1,7 @@
+> **This is a patched fork.** Branch `wizodd-patched` is FutureProofHomes' v0.2.1 firmware plus fixes for a
+> Satellite1 that stops answering its wake word until it is restarted. See [PATCHES.md](PATCHES.md) for the cause,
+> the changes and how to install it. Everything below is the original README.
+
 <a name="readme-top"></a>
 <!--
 *** Readme based upon Best-README-Template.

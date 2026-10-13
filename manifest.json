@@ -1,0 +1,15 @@
+{
+  "name": "ESPHome Firmware for Satellite1-Core-Board",
+  "version": "v0.2.1-wizodd.1",
+  "builds": [
+    {
+      "chipFamily": "ESP32-S3",
+      "ota": {
+        "path": "https://raw.githubusercontent.com/wizodd-tech/Satellite1-ESPHome/firmware/v0.2.1-wizodd.1/satellite1.ota.bin",
+        "md5": "fa6c971ec2d11251d63bbf77c624c0fe",
+        "summary": "FutureProofHomes v0.2.1 with fixes for a satellite that stops answering its wake word until restarted. See PATCHES.md.",
+        "release_url": "https://github.com/wizodd-tech/Satellite1-ESPHome/releases/tag/v0.2.1-wizodd.1"
+      }
+    }
+  ]
+}
